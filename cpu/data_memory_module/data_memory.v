@@ -90,3 +90,7 @@ begin
 end
 
 endmodule
+
+
+//TODO: same as before, remove the timing delays later.
+//i wonder if removing the delays would cause some issue...

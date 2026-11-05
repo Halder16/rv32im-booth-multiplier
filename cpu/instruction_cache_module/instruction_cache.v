@@ -15,9 +15,9 @@ reg VALID [0:7];
 reg [24:0] TAG [0:7];
 
 //set busywait when a pc value is sent to the cache when the ADDRESS is not -4
-always @ (ADDRESS)
-begin
-    if(ADDRESS != -32'd4) BUSYWAIT = 1;
+always @ (*) begin //so that it waits for hit or miss
+    if (ADDRESS != -32'd4) BUSYWAIT = 1;
+    else BUSYWAIT = 0;
 end
     
 //wires to store the extracted values depending on the index part of the address
@@ -90,7 +90,7 @@ begin
 end
 
 // combinational output logic
-always @(STATE)
+always @(*)
 begin
     case(STATE)
         IDLE:
@@ -118,18 +118,18 @@ begin
 end
 
 // sequential logic for state transitioning 
-always @ (posedge CLK, RESET)
+always @ (posedge CLK or posedge RESET)
 begin
-    if(RESET)
-        STATE = IDLE;
+    if (RESET)
+        STATE <= IDLE;
     else
-        STATE = NEXT_STATE;
+        STATE <= NEXT_STATE;
 end
 
 //reset the cache memory when the reset signal is high
 integer i;
 
-always @ (RESET)
+always @ (posedge RESET)
 begin
     if(RESET)
     begin

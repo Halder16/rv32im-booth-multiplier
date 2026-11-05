@@ -33,14 +33,29 @@ wire [1:0] WB_SEL, WB_SEL_EX, WB_SEL_MEM, WB_SEL_WB;
 wire [4:0] ALUOP, ALUOP_EX;
 wire [3:0] READ_WRITE, READ_WRITE_EX, READ_WRITE_MEM;
 
-assign BUSYWAIT = (DATA_BUSYWAIT | INST_BUSYWAIT);
-assign WRITE_ENABLE = (REG_WRITE_EN_WB & !BUSYWAIT);
+// ALU control & handshake signals
+wire alu_ready, alu_busy;
+reg start_signal;
+wire [1:0] alu_mode;
+wire mul_stall;
+// The original PC and register file sample enables after #1, whereas the
+// pipeline registers sample at the edge. Preserve the same MUL stall decision
+// for those delayed consumers when EX changes or completion arrives after NBA.
+reg mul_stall_at_edge;
+always @(posedge CLK or posedge RESET) begin
+    if (RESET) mul_stall_at_edge <= 1'b0;
+    else mul_stall_at_edge <= mul_stall;
+end
+wire delayed_busywait = DATA_BUSYWAIT | INST_BUSYWAIT | mul_stall_at_edge;
+
+assign BUSYWAIT = DATA_BUSYWAIT | INST_BUSYWAIT | mul_stall;
+assign WRITE_ENABLE = REG_WRITE_EN_WB & !delayed_busywait;
 
 // Instruction fetch stage
 mux_2x1_32bit pc_sel_mux(PC_4_OUT, ALU_OUT, PC_SEL_MUX_OUT, PC_SEL);
-register_32bit program_counter(PC_SEL_MUX_OUT, PC_OUT, RESET, CLK, BUSYWAIT);
+register_32bit program_counter(PC_SEL_MUX_OUT, PC_OUT, RESET, CLK, delayed_busywait);
 instruction_cache inst_cache(CLK, RESET, PC_OUT, INSTRUCTION, INST_BUSYWAIT, INST_MEM_ADDRESS, INST_MEM_READ, INST_MEM_READDATA, INST_MEM_BUSYWAIT);
-adder_32bit pc_4_adder(PC_OUT, PC_4_OUT);
+adder_32bit pc_4_adder(PC_OUT, PC_4_OUT); //just for PC increment
 
 if_id_pipeline_reg if_id_reg(INSTRUCTION, PC_OUT, INSTRUCTION_ID, PC_OUT_ID, CLK, (RESET | (CLK & PC_SEL)), BUSYWAIT);
 
@@ -74,7 +89,55 @@ id_ex_pipeline_reg id_ex_reg(INSTRUCTION_ID[11:7], PC_OUT_ID, DATA1_ID, DATA2_ID
 mux_4x1_32bit mux_ex_alu_1(REG_FILE_OUT1_EX, PC_OUT_EX, WB_MUX_OUT, ALU_OUT_MEM, OPERAND1, DATA1ALUSEL_EX);
 mux_4x1_32bit mux_ex_alu_2(REG_FILE_OUT2_EX, IMM_GEN_OUT_EX, WB_MUX_OUT, ALU_OUT_MEM, OPERAND2, DATA2ALUSEL_EX);
 
-alu alu_unit(OPERAND1, OPERAND2, ALU_OUT, ALUOP_EX);
+// Detect multi-cycle MUL variants using case-equality so X values don't propagate
+wire is_mul_variant =
+    (ALUOP_EX === 5'b00001) ||   // MUL
+    (ALUOP_EX === 5'b00101) ||   // MULH
+    (ALUOP_EX === 5'b01001) ||   // MULHSU
+    (ALUOP_EX === 5'b01101);     // MULHU
+
+assign alu_mode = is_mul_variant ? 2'b01 : 2'b00;
+
+// Hold the current EX instruction from before launch until its result has
+// been acknowledged. Completion stays latched across cache stalls.
+reg mul_inflight, mul_done;
+assign mul_stall = is_mul_variant && !mul_done;
+// Cache hit logic changes BUSYWAIT on the rising edge. Decide launch on the
+// falling edge so the multiplier and its tracking state see the same pulse.
+always @(negedge CLK or posedge RESET) begin
+    if (RESET) start_signal <= 1'b0;
+    else start_signal <= is_mul_variant && !mul_inflight &&
+                         !DATA_BUSYWAIT && !INST_BUSYWAIT;
+end
+always @(posedge CLK or posedge RESET) begin
+    if (RESET) begin
+        mul_inflight <= 1'b0;
+        mul_done <= 1'b0;
+    end else begin
+        // Match the original pipeline registers' #0 sampling of cache stalls.
+        #0;
+        if (!BUSYWAIT) begin
+            mul_inflight <= 1'b0;
+            mul_done <= 1'b0;
+        end else begin
+            if (start_signal) mul_inflight <= 1'b1;
+            if (mul_inflight && alu_ready) mul_done <= 1'b1;
+        end
+    end
+end
+
+//DONE: pass clk, etc into alu
+alu alu_unit(.clk(CLK),
+    .rst(RESET),
+    .start(start_signal),
+    .mode(alu_mode),
+    .DATA1(OPERAND1),
+    .DATA2(OPERAND2),
+    .RESULT(ALU_OUT),
+    .SELECT(ALUOP_EX),
+    .ready(alu_ready),
+    .busy(alu_busy)
+);
 
 wire [31:0] MUX_EX_BJ1_OUT, MUX_EX_BJ2_OUT;
 

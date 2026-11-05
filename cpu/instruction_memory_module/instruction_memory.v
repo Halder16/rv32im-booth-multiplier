@@ -23,7 +23,7 @@ reg [7:0] MEM_ARRAY [0:1023];
 //Detecting an incoming memory access
 always @(READ)
 begin
-    BUSYWAIT = (READ)? 1 : 0;
+    BUSYWAIT = (READ)? 1 : 0; //so just BUSYWAIT = READACCESS = READ?, but i guess this is better for understanding
     READACCESS = (READ)? 1 : 0;
 end
 
@@ -54,3 +54,6 @@ begin
 end
  
 endmodule
+
+
+//TODO: remove the timing delays to make it "synthesizable"

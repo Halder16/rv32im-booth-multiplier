@@ -1,5 +1,12 @@
-/**/*.vvp
-/**/*.vcd
-/**/*.out
-/**/*.machine
-/**/*.mem
+# Generated simulator and assembler output
+/build/
+*.vvp
+*.vcd
+*.fst
+*.out
+*.machine
+*.mem
+
+# Local editor/desktop files
+.DS_Store
+*~

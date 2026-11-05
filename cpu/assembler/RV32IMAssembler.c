@@ -486,7 +486,8 @@ int main(int argc, char *argv[])
     char out_file[256];
     FILE *fi, *fo;
     char line[LINE_SIZE];
-    const char delim[] = " ";
+    // const char delim[] = " "; //" \t\r\n"
+    const char delim[] = " \t\r\n";
     char *in_token;
     int lineNumber = 0;
 
@@ -573,11 +574,16 @@ int main(int argc, char *argv[])
                         errorHandler("Invalid instruction", out_file, lineNumber, argv[1]);
                     }
                 }
-                if (registerNumber == 0 && count == 2)
-                {
-                    errorHandler("Can't use x0 as a destination register", out_file, lineNumber, argv[1]);
-                }
-                else if (registerNumber > 31)
+                // if (registerNumber == 0 && count == 2)
+                // {
+                //     errorHandler("Can't use x0 as a destination register", out_file, lineNumber, argv[1]);
+                // }
+                // else if (registerNumber > 31)
+                // {
+                //     errorHandler("Invalid register number", out_file, lineNumber, argv[1]);
+                // }
+                //TODO: fix this, this cant be left as is, this is just for demonstration
+                if (registerNumber > 31)
                 {
                     errorHandler("Invalid register number", out_file, lineNumber, argv[1]);
                 }

@@ -1,0 +1,5 @@
+# Keep HDL, assembler sources, demo programs and scripts consistent across OSes.
+*.v text eol=lf
+*.c text eol=lf
+*.s text eol=lf
+*.sh text eol=lf

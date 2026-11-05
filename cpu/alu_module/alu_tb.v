@@ -1,210 +1,73 @@
-
-`include "../utils/macros.v" 
-`include "../utils/encodings.v"
 `include "alu.v"
-
 module alu_tb;
-
-    reg CLK, RESET;
+    reg clk = 0, rst = 1, start = 0;
+    reg [1:0] mode = 0;
+    reg [31:0] DATA1 = 0, DATA2 = 0;
+    reg [4:0] SELECT = 0;
     wire [31:0] RESULT;
-    reg [31:0] DATA1, DATA2;
-    reg [4:0] SELECT;
+    wire ready, busy;
+    alu dut(clk, rst, start, mode, DATA1, DATA2, RESULT, SELECT, ready, busy);
+    always #5 clk = ~clk;
+    integer checks = 0, i;
+    reg [31:0] a, b;
+    reg [2:0] variant;
+    reg signed [63:0] aa, bb;
+    reg [63:0] product;
 
-    alu myalu(DATA1, DATA2, RESULT, SELECT);
-    
+    task check_mul;
+        input [4:0] operation;
+        input [31:0] a, b, expected;
+        begin
+            @(negedge clk);
+            SELECT = operation; DATA1 = a; DATA2 = b; mode = 1; start = 1;
+            @(negedge clk); start = 0;
+            wait (ready); #1;
+            if (RESULT !== expected)
+                $fatal(1, "ALU op=%b %h * %h: expected %h got %h",
+                       operation, a, b, expected, RESULT);
+            checks = checks + 1;
+            @(negedge clk);
+        end
+    endtask
+    task check_single;
+        input [4:0] operation;
+        input [31:0] a, b, expected;
+        begin
+            @(negedge clk);
+            SELECT = operation; DATA1 = a; DATA2 = b; mode = 0;
+            #1;
+            if (RESULT !== expected || ready !== 1 || busy !== 0)
+                $fatal(1, "single-cycle ALU regression op=%b", operation);
+            checks = checks + 1;
+        end
+    endtask
     initial begin
-        $dumpfile("alu_wavedata.vcd");
-        $dumpvars(0, alu_tb);
-        #1;
-        /* 
-            TEST 1 starts here!
-
-            Should able to perfome add operation.
-            SELECT = 00000 ,DATA1 = 5, DATA2=10, RESULT should be 15
-        */
-            SELECT = `ADD;
-            DATA1 = 32'd5;
-            DATA2 = 32'd10;
-
-            // wait for add to happen
-            #3
-            `assert(RESULT, 32'd15);
-            
-            $display("ALU-OP ADD Passed!");
-        /* TEST 1 ends here! */
-
-        /* 
-            TEST 2 starts here!
-
-            Should able to perfome sub operation.
-            DATA1 = 15, DATA2=10, RESULT should be 5
-        */
-            SELECT = `SUB;
-            DATA1 = 32'd15;
-            DATA2 = 32'd10;
-
-            // wait for add to happen
-            #3
-            `assert(RESULT, 32'd5);
-            
-            $display("ALU-OP SUB Passed!");
-        /* TEST 2 ends here! */
-
-        /* 
-            TEST 3 starts here!
-
-            Should able to perfome SLL operation.
-            DATA1 = 25, DATA2=2, RESULT should be 100
-        */
-            SELECT = `SLL;
-            DATA1 = 32'd25;
-            DATA2 = 32'd2;
-
-            // wait for add to happen
-            #5
-            `assert(RESULT, 32'd100);
-            
-            $display("ALU-OP SLL Passed!");
-        /* TEST 3 ends here! */
-
-        /* 
-            TEST 4 starts here!
-
-            Should able to perfome XOR operation.
-            DATA1 = 25, DATA2=2, RESULT should be 15
-        */
-            SELECT = `XOR;
-            DATA1 = 32'd10;
-            DATA2 = 32'd5;
-
-            // wait for add to happen
-            #5
-            `assert(RESULT, 32'd15);
-            
-            $display("ALU-OP XOR Passed!");
-        /* TEST 4 ends here! */
-
-        /* 
-            TEST 5 starts here!
-
-            Should able to perfome SRL operation.
-            DATA1 = 25, DATA2=2, RESULT should be 15
-        */
-            SELECT = `SRL;
-            DATA1 = 32'd32;
-            DATA2 = 32'd2;
-
-            // wait for add to happen
-            #5
-            `assert(RESULT, 32'd8);
-            
-            $display("ALU-OP SRL Passed!");
-        /* TEST 5 ends here! */
-
-        /* 
-            TEST 6 starts here!
-
-            Should able to perfome SRA operation.
-            DATA1 = -32, DATA2=2, RESULT should be -4
-        */
-            SELECT = `SRA;
-            DATA1 = 32'sd32;
-            DATA2 = 32'd2;
-
-            // wait for add to happen
-            #5
-            `assert(RESULT, 32'sd8);
-            
-            $display("ALU-OP SRA Passed!");
-        /* TEST 6 ends here! */
-
-        /* 
-            TEST 7 starts here!
-
-            Should able to perfome OR operation.
-            DATA1 = 12, DATA2=5, RESULT should be 13
-        */
-            SELECT = `OR;
-            DATA1 = 32'd12;
-            DATA2 = 32'd5;
-
-            // wait for add to happen
-            #5
-            `assert(RESULT, 32'd13);
-            
-            $display("ALU-OP OR Passed!");
-        /* TEST 7 ends here! */
-
-        /* 
-            TEST 8 starts here!
-
-            Should able to perfome MUL operation.
-            DATA1 = 12, DATA2=5, RESULT should be 4
-        */
-            SELECT = `MUL;
-            DATA1 = 32'd4;
-            DATA2 = 32'd5;
-
-            // wait for add to happen
-            #5
-            `assert(RESULT, 32'd20);
-            
-            $display("ALU-OP MUL Passed!");
-        /* TEST 8 ends here! */
-
-        /* 
-            TEST 9 starts here!
-
-            Should able to perfome MULH operation.
-            DATA1 = 131073, DATA2=131073, RESULT should be 4
-            // 100000000000000001 × 100000000000000001 = 0100_00000000000001000000000000000001 (UPPER_LOWER32)
-        */
-            SELECT = `MULH;
-            DATA1 = 32'd131073;
-            DATA2 = 32'd131073;
-            // wait for add to happen
-            #5
-            `assert(RESULT, 32'd4);
-            
-            $display("ALU-OP MULH Passed!");
-        /* TEST 9 ends here! */
-
-        /* 
-            TEST 10 starts here!
-
-            Should able to perfome DIV operation.
-            DATA1 = 32, DATA2=2, RESULT should be 16
-        */
-            SELECT = `DIV;
-            DATA1 = 32'd32;
-            DATA2 = 32'd2;
-            // wait for add to happen
-            #5
-            `assert(RESULT, 32'd16);
-            
-            $display("ALU-OP DIV Passed!");
-        /* TEST 10 ends here! */
-
-        /* 
-            TEST 11 starts here!
-
-            Should able to perfome REM operation.
-            DATA1 = 32, DATA2=2, RESULT should be 16
-        */
-            SELECT = `REM;
-            DATA1 = 32'd31;
-            DATA2 = 32'd2;
-            // wait for add to happen
-            #5
-            `assert(RESULT, 32'd1);
-            
-            $display("ALU-OP REM Passed!");
-        /* TEST 11 ends here! */
-
-        //TODO: Add MULHU, MULSHU, DIVU and REMU 
-
-        #500
+        @(negedge clk); rst = 0;
+        check_single(`ADD, 5, 10, 15);
+        check_single(`SUB, 15, 10, 5);
+        check_single(`SLL, 25, 2, 100);
+        check_single(`XOR, 10, 5, 15);
+        check_single(`SRL, 32, 2, 8);
+        check_single(`OR, 12, 5, 13);
+        check_single(`AND, 12, 5, 4);
+        check_single(`DIV, 32, 2, 16);
+        check_single(`REM, 31, 2, 1);
+        check_mul(`MULHSU, 1, 32'hffffffff, 0);
+        check_mul(`MULHSU, 32'hffffffff, 32'hffffffff, 32'hffffffff);
+        check_mul(`MULHSU, 32'h80000000, 32'hffffffff, 32'h80000000);
+        check_mul(`MULH, 32'h80000000, 32'h80000000, 32'h40000000);
+        check_mul(`MULHU, 32'hffffffff, 32'hffffffff, 32'hfffffffe);
+        for (i = 0; i < 2000; i = i + 1) begin
+            a = $random; b = $random; variant = i % 4;
+            aa = variant == 3 ? {32'd0, a} : {{32{a[31]}}, a};
+            bb = variant >= 2 ? {32'd0, b} : {{32{b[31]}}, b};
+            product = aa * bb;
+            check_mul({variant, 2'b01}, a, b,
+                      variant == 0 ? product[31:0] : product[63:32]);
+        end
+        check_single(`ADD, 40, 2, 42);
+        $display("PASS ALU: %0d checks", checks);
         $finish;
     end
-
+    initial begin #200000; $fatal(1, "ALU timeout"); end
 endmodule

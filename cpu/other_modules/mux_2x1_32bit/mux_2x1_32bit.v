@@ -11,8 +11,8 @@ module mux_2x1_32bit(IN0, IN1, OUT, SELECT);
     
     always @ (*) begin
         case (SELECT)
-            1'b1: OUT = IN1;
-            default: OUT = IN0;
+            1'b1: OUT = IN1; // if sel = 1, IN1 is chosen,
+            default: OUT = IN0; //otherwise, IN0
         endcase
     end
 
